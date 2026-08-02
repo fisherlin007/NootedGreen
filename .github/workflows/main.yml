@@ -4,23 +4,20 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-14  # Intel x86架构，支持SSE指令
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 编译 HookCase，目录 HookCase-master
       - name: Build HookCase
         run: |
           cd HookCase-master
           xcodebuild -project HookCase.xcodeproj -scheme HookCase -configuration Release build
 
-      # 编译 NootedGreen
       - name: Build NootedGreen
         run: |
           xcodebuild -project NootedGreen.xcodeproj -scheme NootedGreen -configuration Release build
 
-      # 收集产物
       - name: Collect Kexts
         run: |
           mkdir Output
