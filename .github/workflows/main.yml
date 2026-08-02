@@ -1,34 +1,34 @@
 name: Build HookCase & NootedGreen
 on:
-  workflow_dispatch:
+  workflow_dispatch
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 编译 HookCase（目录名改为 HookCase-master）
-      - name: Build HookCase.kext
+      # 编译 HookCase，目录 HookCase-master
+      - name: Build HookCase
         run: |
-          xcodebuild -project HookCase-master/HookCase.xcodeproj -scheme HookCase -configuration Release build
+          cd HookCase-master
+          xcodebuild -project HookCase.xcodeproj -scheme HookCase -configuration Release build
 
       # 编译 NootedGreen
-      - name: Build NootedGreen.kext
+      - name: Build NootedGreen
         run: |
           xcodebuild -project NootedGreen.xcodeproj -scheme NootedGreen -configuration Release build
 
-      # 归集产物
-      - name: Collect built kexts
+      # 收集产物
+      - name: Collect Kexts
         run: |
           mkdir Output
           cp -r HookCase-master/build/Release/HookCase.kext Output/
           cp -r NootedGreen/build/Release/NootedGreen.kext Output/
 
-      # 上传打包文件
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Built_Kexts
+          name: Compiled_Kexts
           path: Output/
