@@ -1,0 +1,91 @@
+# ==============================================================================
+# 让 GitHub Actions 帮我们编译 NootedGreen.kext
+#
+# 使用方法：
+#   1. Fork https://github.com/sgiammori/NootedGreen 到你自己的 GitHub 账号
+#      （必须是你自己的 fork，才能在上面跑 Actions；仓库保持 Public 才免费）
+#   2. 在 fork 里新建文件 .github/workflows/build.yml ，把本文件内容粘进去
+#   3. 进 Actions 标签页 -> 左侧选 "Build NootedGreen.kext" -> Run workflow
+#   4. 跑完后在 Artifacts 区下载 NootedGreen-kext
+#
+# 说明：MacKernelSDK / Lilu.kext / HookCase-master 都已随仓库打包，无需额外拉取。
+# ==============================================================================
+
+name: Build NootedGreen.kext
+
+on:
+  workflow_dispatch:      # 允许在网页手动点一下就跑
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build kext (macOS)
+    runs-on: macos-14     # 若该镜像已下线，改成 macos-15 或 macos-13
+
+    steps:
+      - name: Checkout (含子模块)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 打印环境（排错用）
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcode-select -p
+          echo "--- repo root ---"
+          ls -la
+          echo "--- MacKernelSDK ---"
+          ls MacKernelSDK 2>/dev/null | head || echo "(缺失)"
+
+      - name: 确保 MacKernelSDK 存在
+        run: |
+          if [ ! -d "MacKernelSDK/Headers" ]; then
+            echo "MacKernelSDK 缺失，改用官方仓库克隆"
+            rm -rf MacKernelSDK
+            git clone --depth 1 https://github.com/acidanthera/MacKernelSDK.git MacKernelSDK
+          fi
+          ls MacKernelSDK/Headers | head -5
+
+      - name: 编译 Release（强制 x86_64）
+        run: |
+          xcodebuild \
+            -project NootedGreen.xcodeproj \
+            -scheme NootedGreen \
+            -configuration Release \
+            -derivedDataPath build \
+            ARCHS=x86_64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: 校验产物架构（必须是 x86_64）
+        run: |
+          BIN=$(find build -type f -path "*NootedGreen.kext/Contents/MacOS/NootedGreen" | head -n 1)
+          if [ -z "$BIN" ]; then
+            echo "::error::找不到编译产物"
+            find build -name "*.kext" -maxdepth 6 || true
+            exit 1
+          fi
+          echo "产物: $BIN"
+          file "$BIN"
+          echo "架构: $(lipo -archs "$BIN")"
+          case "$(lipo -archs "$BIN")" in
+            *x86_64*) echo "OK: 包含 x86_64" ;;
+            *) echo "::error::产物不是 x86_64，无法用于 Intel 黑苹果"; exit 1 ;;
+          esac
+
+      - name: 打包 kext
+        run: |
+          KEXT=$(find build -type d -name "NootedGreen.kext" | head -n 1)
+          ditto -c -k --keepParent "$KEXT" NootedGreen.kext.zip
+          ls -la NootedGreen.kext.zip
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: NootedGreen-kext
+          path: NootedGreen.kext.zip
+          retention-days: 90
